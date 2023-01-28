@@ -21,7 +21,7 @@ Slim framework skeleton application for REST API project.
 
 ### Installation
 ```bash
-git clone https://github.com/nemo9l/php-slim-framework ./app
+git clone https://github.com/nemorize/php-slim-framework ./app
 cd ./app
 composer install
 ```
