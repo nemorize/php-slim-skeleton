@@ -12,6 +12,10 @@ class Redis extends RedisClient
      */
     public function __construct ()
     {
-        parent::__construct(Application::get('env:REDIS_DSN'));
+        $redisDsn = Application::get('env:REDIS_DSN');
+        if ($redisDsn === null) {
+            return;
+        }
+        parent::__construct($redisDsn);
     }
 }
