@@ -2,6 +2,7 @@
 
 namespace App;
 
+use App\Core\Connectors\Sentry;
 use App\Core\Exceptable;
 use DI\Container;
 use DI\ContainerBuilder;
@@ -9,8 +10,6 @@ use Dotenv\Dotenv;
 use Exception;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Log\LoggerInterface;
-use Sentry\ClientBuilder as SentryClientBuilder;
-use Sentry\State\Hub as SentryHub;
 use Slim\App as SlimApp;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Response;
@@ -34,11 +33,6 @@ class Application
     private Container $container;
 
     /**
-     * @var ?SentryHub $sentryHub Sentry hub.
-     */
-    private ?SentryHub $sentryHub;
-
-    /**
      * Constructor.
      *
      * @throws Exception
@@ -58,11 +52,20 @@ class Application
             }
         }
 
+        $connectors = $this->bootstrapConnectors();
+        $this->set('app:connectors', $connectors);
+        foreach ($connectors as $key => $value) {
+            if (!$this->has($key)) {
+                $this->set($key, $value);
+            }
+            if (!$this->has('connector:' . $key)) {
+                $this->set('connector:' . $key, $value);
+            }
+        }
+
         $this->app = $this->createSlimApplication($this->container);
         $this->set('slim', $this->app);
         $this->set(SlimApp::class, $this->app);
-
-        $this->sentryHub = $this->createSentryHub();
         $this->addErrorMiddleware($this->app);
     }
 
@@ -117,20 +120,18 @@ class Application
     }
 
     /**
-     * Create Sentry hub.
+     * Get connector instances.
      *
-     * @return ?SentryHub
+     * @return array
      */
-    private function createSentryHub (): ?SentryHub
+    private function bootstrapConnectors (): array
     {
-        $sentryDsn = $_ENV['SENTRY_DSN'] ?? null;
-        if ($sentryDsn === null) {
-            return null;
+        $connectors = $this->get('app:connectors') ?? [];
+        foreach ($connectors as $i => $connector) {
+            $connectors[$i] = $this->get($connector);
         }
 
-        $sentryHub = new SentryHub();
-        $sentryHub->bindClient(SentryClientBuilder::create([ 'dsn' => $sentryDsn ])->getClient());
-        return $sentryHub;
+        return $connectors;
     }
 
     /**
@@ -176,7 +177,9 @@ class Application
         }
 
         if ($logErrors) {
-            $this->sentryHub?->captureException($throwable);
+            if ($this->has(Sentry::class)) {
+                $this->get(Sentry::class)->captureException($throwable);
+            }
             $logger?->error($throwable, [ 'exception' => $throwable ]);
         }
 
